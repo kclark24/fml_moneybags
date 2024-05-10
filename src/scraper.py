@@ -1,6 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
-from config import HEADERS, PROXIES
+from zyte_api import ZyteAPI
+import json
+from config import API_KEY
 
 game_urls = [
   "https://www.espn.com/nhl/team/schedule/_/name/bos/seasontype/2",
@@ -44,22 +46,29 @@ test_url = [
   "https://www.espn.com/nhl/team/schedule/_/name/bos/seasontype/2"
 ]
 
+client = ZyteAPI(api_key=API_KEY)
+
 def scrape_game(url):
     try:
         # Send a GET request to the URL through Zyte Smart Proxy Manager
-        response = requests.get(url, headers=HEADERS, proxies=PROXIES)
-        response.raise_for_status()  # Raises an HTTPError for bad responses
+        response = client.get({"url": url, "httpResponseBody": True})
+        if response.get('status') == 200:
+            # Assuming the HTML content is in the 'body' key of the JSON response
+            json_response = json.loads(response.text)
+            html_content = json_response.get('body', '')
 
-        # Parse the HTML content of the page
-        soup = BeautifulSoup(response.text, 'html.parser')
+            # Parse the HTML content of the page
+            soup = BeautifulSoup(html_content, 'html.parser')
 
-        # Find the div with aria-label="Standings Page"
-        standings_div = soup.find('div', {'aria-label': 'Standings Page'})
+            # Find the div with aria-label="Standings Page"
+            standings_div = soup.find('div', {'aria-label': 'Standings Page'})
 
-        # Collect all gameID links
-        game_links = {link['href'] for link in standings_div.find_all('a', href=True) if "gameID" in link['href']} if standings_div else set()
-
-        return game_links
+            # Collect all gameID links
+            game_links = {link['href'] for link in standings_div.find_all('a', href=True) if "gameID" in link['href']} if standings_div else set()
+            return game_links
+        else:
+            print(f"Failed to fetch {url}: HTTP Status {response.status_code}")
+            return set()
     except Exception as e:
         print(f"Failed to scrape {url}: {e}")
         return set()
