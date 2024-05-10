@@ -83,7 +83,25 @@ def modify_links(links):
     return modified_links
 
 def get_data(links):
-    return 0
+    for url in links:
+        try:
+            response = client.get({"url": url, "browserHtml": True})
+
+            if response['statusCode'] == 200:
+                soup = BeautifulSoup(response['browserHtml'], 'html.parser')
+                rows = soup.find_all('tr', class_='Table__TR--sm')
+
+                for row in rows:
+                    tds = row.find_all('td')
+                    for item in tds:
+                        print(item.text)
+                return 0
+            else:
+                print(f"Soup error, failed to fetch {url}: HTTP Status {response.status_code}")
+                return set()
+        except Exception as e:
+            print(f"Zyte error, failed to scrape {url}: {e}")
+            return set()
 
 # 3. Get game data    
 box_score_urls = []
