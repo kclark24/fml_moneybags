@@ -1,4 +1,5 @@
 import requests
+import re
 from bs4 import BeautifulSoup
 from zyte_api import ZyteAPI
 import json
@@ -72,39 +73,45 @@ def scrape_game(url):
         print(f"Zyte error, failed to scrape {url}: {e}")
         return set()
 
-# Function to extract "Full Box Score" URLs from acquired links
-def extract_box_score_urls(acquired_links):
-    box_score_urls = []
-    for url in acquired_links:
-        try:
-            # Send a GET request to the acquired link
-            response = requests.get(url)
-            response.raise_for_status()  # Raises an HTTPError for bad responses
+def modify_links(links):
+    modified_links = []
+    for link in links:
+        match = re.search(r'/gameId/(\d+)/', link)
+        if match:
+            game_id = match.group(1)
+            modified_links.append("https://www.espn.com/nhl/boxscore/_/gameId/" + game_id)
+    return modified_links
 
-            # Parse the HTML content of the page
-            soup = BeautifulSoup(response.text, 'html.parser')
+def get_data(links):
+    return 0
 
-            # Find all links with text "Full Box Score"
-            for link in soup.find_all('a', text='Full Box Score', href=True):
-                box_score_urls.append(link['href'])
+# 3. Get game data    
+box_score_urls = []
+# Gather game and player data
+with open('all_boxscore_links.txt', 'r') as f:
+    box_score_urls = {line.strip() for line in f}
 
-        except Exception as e:
-            print(f"Failed to extract box score URL from {url}: {e}")
+game_data = get_data(box_score_urls)
 
-    return box_score_urls
+# 1. Scrape game links
+# all_game_links = set()
+# for url in test_url:
+#     links = scrape_game(url)
+#     print(f"scraped {len(links)} games from {url} regular season")
+#     all_game_links.update(links)
+# with open('all_game_links.txt', 'w') as f:
+#     for link in all_game_links:
+#         f.write(link + '\n')
 
-# Main scraping logic
-all_game_links = set()
-for url in test_url:
-    links = scrape_game(url)
-    print(f"scraped {len(links)} games from {url} regular season")
-    all_game_links.update(links)
+# # 2. Get to box score urls
+# with open('all_game_links.txt', 'r') as f:
+#     all_game_links = {line.strip() for line in f}
 
-print(all_game_links)
-print(len(all_game_links))
-# Extract "Full Box Score" URLs from acquired links
-box_score_urls = extract_box_score_urls(all_game_links)
+# # Extract "Full Box Score" URLs from acquired links
+# box_score_urls = modify_links(all_game_links)
 
-# Output all found box score URLs
-# print("All Full Box Score URLs found:", box_score_urls)
+# with open('all_boxscore_links.txt', 'w') as f:
+#     for link in box_score_urls:
+#         f.write(link + '\n')
+
 
