@@ -43,34 +43,33 @@ game_urls = [
 ]
 
 test_url = [
-  "https://www.espn.com/nhl/team/schedule/_/name/bos/seasontype/2"
+  "https://www.espn.com/nhl/team/schedule/_/name/bos/seasontype/2",
+#   "https://www.espn.com/nhl/team/schedule/_/name/buf/seasontype/2",
 ]
 
 client = ZyteAPI(api_key=API_KEY)
 
+# TODO: Modify so that I do the 32 team scrape requests in parallel instead
 def scrape_game(url):
     try:
-        # Send a GET request to the URL through Zyte Smart Proxy Manager
-        response = client.get({"url": url, "httpResponseBody": True})
-        if response.get('status') == 200:
-            # Assuming the HTML content is in the 'body' key of the JSON response
-            json_response = json.loads(response.text)
-            html_content = json_response.get('body', '')
+        response = client.get({"url": url, "browserHtml": True})
 
-            # Parse the HTML content of the page
-            soup = BeautifulSoup(html_content, 'html.parser')
+        if response['statusCode'] == 200:
+            soup = BeautifulSoup(response['browserHtml'], 'html.parser')
+            anchor_links = soup.select('a.AnchorLink:not(.MatchInfo__Link)')
 
-            # Find the div with aria-label="Standings Page"
-            standings_div = soup.find('div', {'aria-label': 'Standings Page'})
+            game_ids = set()
+            for link in anchor_links:
+                href = link.get('href')
+                if href and "gameId" in href:
+                    game_ids.add(href)
 
-            # Collect all gameID links
-            game_links = {link['href'] for link in standings_div.find_all('a', href=True) if "gameID" in link['href']} if standings_div else set()
-            return game_links
+            return game_ids
         else:
-            print(f"Failed to fetch {url}: HTTP Status {response.status_code}")
+            print(f"Soup error, failed to fetch {url}: HTTP Status {response.status_code}")
             return set()
     except Exception as e:
-        print(f"Failed to scrape {url}: {e}")
+        print(f"Zyte error, failed to scrape {url}: {e}")
         return set()
 
 # Function to extract "Full Box Score" URLs from acquired links
@@ -98,11 +97,13 @@ def extract_box_score_urls(acquired_links):
 all_game_links = set()
 for url in test_url:
     links = scrape_game(url)
+    print(f"scraped {len(links)} games from {url} regular season")
     all_game_links.update(links)
-    print(f"Found links for {url}: {links}")
 
+print(all_game_links)
+print(len(all_game_links))
 # Extract "Full Box Score" URLs from acquired links
-# box_score_urls = extract_box_score_urls(all_game_links)
+box_score_urls = extract_box_score_urls(all_game_links)
 
 # Output all found box score URLs
 # print("All Full Box Score URLs found:", box_score_urls)
