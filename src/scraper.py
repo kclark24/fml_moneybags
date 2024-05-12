@@ -1,5 +1,7 @@
 import requests
 import re
+import csv
+import time
 from bs4 import BeautifulSoup
 from zyte_api import ZyteAPI
 import json
@@ -79,7 +81,9 @@ def modify_links(links):
 
 def get_data(links):
     data = {}
+    i = 0
     for url in links:
+        start_time = time.time()
         game_id = url.split("/")[-1]
         try:
             response = client.get({"url": url, "browserHtml": True})
@@ -92,6 +96,18 @@ def get_data(links):
                     tds = row.find_all('td')
                     for item in tds:
                         data[game_id] += item.text + "\n"
+
+                meta_div = soup.find('div', class_='GameInfo__Meta')
+                # Find the first span element within the div
+                if meta_div:
+                    first_span = meta_div.find('span')
+                    if first_span:
+                        # Extract text from the first span
+                        data[game_id] += first_span.get_text() + "\n" 
+                end_time = time.time()
+                print(f"Got game data {i} of {len(links)} games")
+                i += 1
+                print(f"Iteration for {url} took: {end_time - start_time} seconds")
             else:
                 print(f"Soup error, failed to fetch {url}: HTTP Status {response.status_code}")
         except Exception as e:
@@ -101,34 +117,55 @@ def get_data(links):
 def process_data(data):
     processed_data = {}
     for game in data:
-        # print(data[game])
         game_id = game
         lines = data[game].split('\n')
-        # print(lines)
         game_data = {}
+        game_data["Date"] = lines[-2]
         teams_found = 0
         scores_found = False
-        f_start_found = False
+        away_roster_found = False
         away_roster = []
         home_roster = []
         for i in range(0, len(lines)):
-            print(lines[i])
+            # get game results
             if teams_found < 2 and re.match(r'^[A-Z]{3}$', lines[i]):
                 if teams_found == 0:
                     game_data['away_team'] = lines[i]
                 else:
                     game_data['home_team'] = lines[i]
-                    game_data["away_score"] = lines[i - 1]
+                    game_data['away_score'] = lines[i - 1]
                 teams_found += 1
             
             if not scores_found and lines[i] == 'forwards':
-                game_data["home_score"] = lines[i - 1]
+                game_data['home_score'] = lines[i - 1]
                 scores_found = True
 
-            # TODO: Get rosters now                
+            # get players       
+            if lines[i] == 'forwards':
+                j = i + 1
+                while lines[j] != 'G':
+                    if lines[j] != 'defensemen':
+                        position = lines[j].rfind(' ')
+                        line = lines[j][:position]
+                        if away_roster_found == False:
+                            away_roster.append(line)
+                        else:
+                            home_roster.append(line)
+                    j += 1
+                away_roster_found = True
+            game_data['away_roster'] = away_roster
+            game_data['home_roster'] = home_roster
+
+            # get goalies
+            if lines[i] == 'goalies':
+                position = lines[i + 1].rfind(' ')
+                goalie = lines[i + 1][:position]
+                if len(home_roster) == 0:
+                    game_data['away_goalie'] = goalie
+                else:
+                    game_data['home_goalie'] = goalie
 
         processed_data[game_id] = game_data
-        # get rosters and goalies
     return processed_data
 
 # 3. Get game data and process it  
@@ -140,7 +177,30 @@ with open('all_boxscore_links.txt', 'r') as f:
 game_data = get_data(box_score_urls)
 
 processed_data = process_data(game_data)
-print(processed_data)
+
+# 4. Enter gathered data into a csv file
+csv_file_path = 'game_data.csv'
+
+# Define the field names
+fieldnames = ['Game ID', 'Date', 'Away Team', 'Home Team', 'Away Roster', 'Home Roster', 'Away Score', 'Home Score', 'Away Goalie', 'Home Goalie']
+
+# Write the data to the CSV file
+with open(csv_file_path, 'w', newline='') as csvfile:
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    writer.writeheader()
+    for game_id, data in processed_data.items():
+        writer.writerow({
+            'Game ID': game_id,
+            'Date': data['Date'],
+            'Away Team': data['away_team'],
+            'Home Team': data['home_team'],
+            'Away Roster': ', '.join(data['away_roster']),
+            'Home Roster': ', '.join(data['home_roster']),
+            'Away Score': data['away_score'],
+            'Home Score': data['home_score'],
+            'Away Goalie': data['away_goalie'],
+            'Home Goalie': data['home_goalie']
+        })
 
 
 # 1. Scrape game links
