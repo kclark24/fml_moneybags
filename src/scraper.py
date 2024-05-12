@@ -43,11 +43,6 @@ game_urls = [
   "https://www.espn.com/nhl/team/schedule/_/name/vgk/seasontype/2",
 ]
 
-test_url = [
-  "https://www.espn.com/nhl/team/schedule/_/name/bos/seasontype/2",
-#   "https://www.espn.com/nhl/team/schedule/_/name/buf/seasontype/2",
-]
-
 client = ZyteAPI(api_key=API_KEY)
 
 # TODO: Modify so that I do the 32 team scrape requests in parallel instead
@@ -83,33 +78,70 @@ def modify_links(links):
     return modified_links
 
 def get_data(links):
+    data = {}
     for url in links:
+        game_id = url.split("/")[-1]
         try:
             response = client.get({"url": url, "browserHtml": True})
 
             if response['statusCode'] == 200:
                 soup = BeautifulSoup(response['browserHtml'], 'html.parser')
                 rows = soup.find_all('tr', class_='Table__TR--sm')
-
+                data[game_id] = ""
                 for row in rows:
                     tds = row.find_all('td')
                     for item in tds:
-                        print(item.text)
-                return 0
+                        data[game_id] += item.text + "\n"
             else:
                 print(f"Soup error, failed to fetch {url}: HTTP Status {response.status_code}")
-                return set()
         except Exception as e:
             print(f"Zyte error, failed to scrape {url}: {e}")
-            return set()
+    return data
 
-# 3. Get game data    
-box_score_urls = []
+def process_data(data):
+    processed_data = {}
+    for game in data:
+        # print(data[game])
+        game_id = game
+        lines = data[game].split('\n')
+        # print(lines)
+        game_data = {}
+        teams_found = 0
+        scores_found = False
+        f_start_found = False
+        away_roster = []
+        home_roster = []
+        for i in range(0, len(lines)):
+            print(lines[i])
+            if teams_found < 2 and re.match(r'^[A-Z]{3}$', lines[i]):
+                if teams_found == 0:
+                    game_data['away_team'] = lines[i]
+                else:
+                    game_data['home_team'] = lines[i]
+                    game_data["away_score"] = lines[i - 1]
+                teams_found += 1
+            
+            if not scores_found and lines[i] == 'forwards':
+                game_data["home_score"] = lines[i - 1]
+                scores_found = True
+
+            # TODO: Get rosters now                
+
+        processed_data[game_id] = game_data
+        # get rosters and goalies
+    return processed_data
+
+# 3. Get game data and process it  
+# box_score_urls = []
 # Gather game and player data
 with open('all_boxscore_links.txt', 'r') as f:
     box_score_urls = {line.strip() for line in f}
 
 game_data = get_data(box_score_urls)
+
+processed_data = process_data(game_data)
+print(processed_data)
+
 
 # 1. Scrape game links
 # all_game_links = set()
@@ -131,5 +163,4 @@ game_data = get_data(box_score_urls)
 # with open('all_boxscore_links.txt', 'w') as f:
 #     for link in box_score_urls:
 #         f.write(link + '\n')
-
 
