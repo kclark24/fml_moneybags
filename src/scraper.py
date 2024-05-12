@@ -1,10 +1,8 @@
-import requests
 import re
 import csv
 import time
 from bs4 import BeautifulSoup
-from zyte_api import ZyteAPI
-import json
+from zyte_api import ZyteAPI, RequestError
 from config import API_KEY
 
 game_urls = [
@@ -45,9 +43,8 @@ game_urls = [
   "https://www.espn.com/nhl/team/schedule/_/name/vgk/seasontype/2",
 ]
 
-client = ZyteAPI(api_key=API_KEY)
+client = ZyteAPI(api_key=API_KEY, n_conn=30)
 
-# TODO: Modify so that I do the 32 team scrape requests in parallel instead
 def scrape_game(url):
     try:
         response = client.get({"url": url, "browserHtml": True})
@@ -82,38 +79,37 @@ def modify_links(links):
 def get_data(links):
     data = {}
     i = 0
-    for url in links:
-        start_time = time.time()
-        game_id = url.split("/")[-1]
-        try:
-            response = client.get({"url": url, "browserHtml": True})
+    start_time = time.time()
+    with client.session() as session:
+        for result_or_exception in session.iter(links):
+            if isinstance(result_or_exception, dict):
+                game_id = result_or_exception["url"].split("/")[-1]
+                try:
+                    if result_or_exception['statusCode'] == 200:
+                        soup = BeautifulSoup(result_or_exception['browserHtml'], 'html.parser')
+                        rows = soup.find_all('tr', class_='Table__TR--sm')
+                        data[game_id] = ""
+                        for row in rows:
+                            tds = row.find_all('td')
+                            for item in tds:
+                                data[game_id] += item.text + "\n"
 
-            if response['statusCode'] == 200:
-                soup = BeautifulSoup(response['browserHtml'], 'html.parser')
-                rows = soup.find_all('tr', class_='Table__TR--sm')
-                data[game_id] = ""
-                for row in rows:
-                    tds = row.find_all('td')
-                    for item in tds:
-                        data[game_id] += item.text + "\n"
-
-                meta_div = soup.find('div', class_='GameInfo__Meta')
-                # Find the first span element within the div
-                if meta_div:
-                    first_span = meta_div.find('span')
-                    if first_span:
-                        # Extract text from the first span
-                        data[game_id] += first_span.get_text() + "\n" 
-                end_time = time.time()
-                print(f"Got game data {i} of {len(links)} games")
-                i += 1
-                print(f"Iteration for {url} took: {end_time - start_time} seconds")
-            else:
-                print(f"Soup error, failed to fetch {url}: HTTP Status {response.status_code}")
-        except Exception as e:
-            print(f"Zyte error, failed to scrape {url}: {e}")
+                        meta_div = soup.find('div', class_='GameInfo__Meta')
+                        # Find the first span element within the div
+                        if meta_div:
+                            first_span = meta_div.find('span')
+                            if first_span:
+                                # Extract text from the first span
+                                data[game_id] += first_span.get_text() + "\n" 
+                    else:
+                        print(f"Soup error, failed to fetch {result_or_exception['url']}: HTTP Status {result_or_exception['status_code']}")
+                except Exception as e:
+                    print(f"Zyte error, failed to scrape {result_or_exception['url']}: {e}")
+        end_time = time.time()
+        print(f"Iteration took: {end_time - start_time} seconds")
     return data
 
+# TODO: somehow boston plays PIM sometimes, and shootout games mess up score
 def process_data(data):
     processed_data = {}
     for game in data:
@@ -170,21 +166,15 @@ def process_data(data):
 
 # 3. Get game data and process it  
 # box_score_urls = []
-# Gather game and player data
 with open('all_boxscore_links.txt', 'r') as f:
     box_score_urls = {line.strip() for line in f}
-
-game_data = get_data(box_score_urls)
-
+adjusted_links = [{"url": url, "browserHtml": True} for url in box_score_urls]
+game_data = get_data(adjusted_links)
 processed_data = process_data(game_data)
 
 # 4. Enter gathered data into a csv file
 csv_file_path = 'game_data.csv'
-
-# Define the field names
 fieldnames = ['Game ID', 'Date', 'Away Team', 'Home Team', 'Away Roster', 'Home Roster', 'Away Score', 'Home Score', 'Away Goalie', 'Home Goalie']
-
-# Write the data to the CSV file
 with open(csv_file_path, 'w', newline='') as csvfile:
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
     writer.writeheader()
