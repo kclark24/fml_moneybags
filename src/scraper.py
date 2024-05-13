@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from zyte_api import ZyteAPI, RequestError
 from config import API_KEY
 
-game_urls = [
+game_urls_2023_2024 = [
   "https://www.espn.com/nhl/team/schedule/_/name/bos/seasontype/2",
   "https://www.espn.com/nhl/team/schedule/_/name/buf/seasontype/2",
   "https://www.espn.com/nhl/team/schedule/_/name/det/seasontype/2",
@@ -43,7 +43,45 @@ game_urls = [
   "https://www.espn.com/nhl/team/schedule/_/name/vgk/seasontype/2",
 ]
 
-client = ZyteAPI(api_key=API_KEY, n_conn=30)
+game_urls_2022_2023 = [
+    "https://www.espn.com/nhl/team/schedule/_/name/bos/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/buf/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/det/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/fla/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/mtl/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/ott/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/tb/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/tor/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/ari/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/chi/season/2023/seasontype/2",
+
+    "https://www.espn.com/nhl/team/schedule/_/name/col/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/dal/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/min/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/nsh/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/stl/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/wpg/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/car/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/cbj/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/nj/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/nyi/season/2023/seasontype/2",
+
+    "https://www.espn.com/nhl/team/schedule/_/name/nyr/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/phi/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/pit/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/wsh/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/ana/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/cgy/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/edm/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/la/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/sj/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/sea/season/2023/seasontype/2",
+
+    "https://www.espn.com/nhl/team/schedule/_/name/van/season/2023/seasontype/2",
+    "https://www.espn.com/nhl/team/schedule/_/name/vgk/season/2023/seasontype/2",
+]
+
+client = ZyteAPI(api_key=API_KEY, n_conn=80)
 
 def scrape_game(url):
     try:
@@ -101,15 +139,16 @@ def get_data(links):
                             if first_span:
                                 # Extract text from the first span
                                 data[game_id] += first_span.get_text() + "\n" 
+                        end_time = time.time()
+                        print(f"Got data for {i} games out of {len(links) - 1}")
+                        print(f"Iteration took: {end_time - start_time} seconds")
+                        i += 1
                     else:
                         print(f"Soup error, failed to fetch {result_or_exception['url']}: HTTP Status {result_or_exception['status_code']}")
                 except Exception as e:
                     print(f"Zyte error, failed to scrape {result_or_exception['url']}: {e}")
-        end_time = time.time()
-        print(f"Iteration took: {end_time - start_time} seconds")
     return data
 
-# TODO: somehow boston plays PIM sometimes, and shootout games mess up score
 def process_data(data):
     processed_data = {}
     for game in data:
@@ -124,7 +163,7 @@ def process_data(data):
         home_roster = []
         for i in range(0, len(lines)):
             # get game results
-            if teams_found < 2 and re.match(r'^[A-Z]{3}$', lines[i]):
+            if teams_found < 2 and re.match(r'^[A-Z]{2,3}$', lines[i]):
                 if teams_found == 0:
                     game_data['away_team'] = lines[i]
                 else:
@@ -164,16 +203,35 @@ def process_data(data):
         processed_data[game_id] = game_data
     return processed_data
 
+# 1. Scrape game links
+all_game_links = set()
+for url in game_urls_2022_2023:
+    links = scrape_game(url)
+    print(f"scraped {len(links)} games from {url} regular season")
+    all_game_links.update(links)
+with open('2022-2023_game_links.txt', 'w') as f:
+    for link in all_game_links:
+        f.write(link + '\n')
+
+# 2. Get to box score urls
+with open('2022-2023_game_links.txt', 'r') as f:
+    all_game_links = {line.strip() for line in f}
+# Extract "Full Box Score" URLs from acquired links
+box_score_urls = modify_links(all_game_links)
+
+with open('2022-2023_boxscore_links.txt', 'w') as f:
+    for link in box_score_urls:
+        f.write(link + '\n')
+
 # 3. Get game data and process it  
-# box_score_urls = []
-with open('all_boxscore_links.txt', 'r') as f:
+with open('2022-2023_boxscore_links.txt', 'r') as f:
     box_score_urls = {line.strip() for line in f}
 adjusted_links = [{"url": url, "browserHtml": True} for url in box_score_urls]
 game_data = get_data(adjusted_links)
 processed_data = process_data(game_data)
 
 # 4. Enter gathered data into a csv file
-csv_file_path = 'game_data.csv'
+csv_file_path = '2022-2023_game_data.csv'
 fieldnames = ['Game ID', 'Date', 'Away Team', 'Home Team', 'Away Roster', 'Home Roster', 'Away Score', 'Home Score', 'Away Goalie', 'Home Goalie']
 with open(csv_file_path, 'w', newline='') as csvfile:
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -191,26 +249,4 @@ with open(csv_file_path, 'w', newline='') as csvfile:
             'Away Goalie': data['away_goalie'],
             'Home Goalie': data['home_goalie']
         })
-
-
-# 1. Scrape game links
-# all_game_links = set()
-# for url in test_url:
-#     links = scrape_game(url)
-#     print(f"scraped {len(links)} games from {url} regular season")
-#     all_game_links.update(links)
-# with open('all_game_links.txt', 'w') as f:
-#     for link in all_game_links:
-#         f.write(link + '\n')
-
-# # 2. Get to box score urls
-# with open('all_game_links.txt', 'r') as f:
-#     all_game_links = {line.strip() for line in f}
-
-# # Extract "Full Box Score" URLs from acquired links
-# box_score_urls = modify_links(all_game_links)
-
-# with open('all_boxscore_links.txt', 'w') as f:
-#     for link in box_score_urls:
-#         f.write(link + '\n')
 
