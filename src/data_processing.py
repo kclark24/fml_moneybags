@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 from LogisticRegression import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 
 # Load the Excel file
 def normalize_data(data):
@@ -16,23 +18,19 @@ def normalize_data(data):
 
 def abbreviate_name(full_name):
     parts = full_name.split()  
-    if len(parts) >= 2:  
+    if len(parts) == 2:  
         first_name = parts[0]
         last_name = parts[-1] 
         return f"{first_name[0]}. {last_name}"
+    
+    elif len(parts) > 2:
+        first_name = parts[0]
+        last_name = ""
+        for i in range(len(parts[1:])):
+            last_name += " " + parts[i+1]
+        return f"{first_name[0]}.{last_name}"
+
     return full_name 
-
-player_data = normalize_data(pd.read_excel('../Stats/2022-23 Player Stats.xlsx'))
-player_data['Player'] = player_data['Player'].apply(abbreviate_name)
-player_data.set_index('Player', inplace=True)
-
-goalie_data = pd.read_excel('../Stats/2022-23 Goalie Stats.xlsx')
-goalie_data['Player'] = goalie_data['Player'].apply(abbreviate_name)
-goalie_data.set_index('Player', inplace=True)
-
-game_data = pd.read_csv('../src/Game_data/2023-2024_game_data.csv')
-
-
 
 def get_roster_data(roster):
     players = [player.strip() for player in roster.split(",")]
@@ -41,7 +39,6 @@ def get_roster_data(roster):
 
 def get_goalie_data(goalie):
     return goalie_data.loc[goalie]
-
 
 def get_game_info(game):
     home_roster_stats = get_roster_data(game['Home Roster'])
@@ -72,18 +69,14 @@ def average_stats(team_stats):
 
     for stat in stats_list:
 
-        if stat == 'FOW%':
-            holder = 0
-            centers = 0
-            for i in range(len(team_stats[stat])):
-                if team_stats[stat].iloc[i] != '--':
-                    holder += team_stats[stat].iloc[i]
-                    centers += 1
-            average_stats[stat] = holder / centers
+        total = 0
+        players = 0
+        for i in range(len(team_stats[stat])):
+            if team_stats[stat].iloc[i] != '--':
+                total += team_stats[stat].iloc[i]
+                players += 1
+        average_stats[stat] = total / players
 
-        else:
-
-            average_stats[stat] = team_stats[stat].sum() / len(team_stats[stat])
 
     return average_stats
 
@@ -94,8 +87,6 @@ def calculate_features(game_info):
 
     home_goalie_stats = game_info['home_goalie_stats']
     away_goalie_stats = game_info['away_goalie_stats']
-
-    print(home_goalie_stats)
 
     home_win = game_info['home_win']
 
@@ -109,22 +100,58 @@ def calculate_features(game_info):
     away_stats['Sv%'] = away_goalie_stats['Sv%']
     away_stats['GAA'] = away_goalie_stats['GAA']
 
-
-    # for i in range(len(home_roster_stats)):
-    #     player = home_roster_stats.iloc[i]
-    #     toi = player['TOI/GP']
     return [home_stats, away_stats, home_win] # here, X is home stats and away stats, y is home_win
 
         
         
+def prepare_data(game_data):
+    expected_feature_length = 32
+    features = []
+    labels = []
+    
+    for index, game in game_data.iterrows():
+        game_info = get_game_info(game)
+        feature_set = calculate_features(game_info)
+        
+        home_features = list(feature_set[0].values())
+        away_features = list(feature_set[1].values())
+        combined_features = home_features + away_features
+
+        # Check if all feature vectors are of the same length
+        if len(combined_features) != expected_feature_length:  # Define expected_feature_length based on your model
+            print(f"Error in game index {index}: Feature length mismatch.")
+            continue  # Skip this game or handle the error as needed
+
+        features.append(combined_features)
+        labels.append(feature_set[2])  # home_win is at index 2
+        
+    return np.array(features), np.array(labels)
 
 
-# Example usage with the first item in the game_data DataFrame
-game_data = get_game_info(game_data.iloc[2])
-print(calculate_features(game_data))
 
-# game_roster_stats = get_game_data(game_data.iloc[0]['Home Roster'])
-# print(game_roster_stats)
 
+player_data = normalize_data(pd.read_excel('../Stats/2022-23 Player Stats.xlsx'))
+player_data['Player'] = player_data['Player'].apply(abbreviate_name)
+player_data.set_index('Player', inplace=True)
+
+goalie_data = pd.read_excel('../Stats/2022-23 Goalie Stats.xlsx')
+goalie_data['Player'] = goalie_data['Player'].apply(abbreviate_name)
+goalie_data.set_index('Player', inplace=True)
+
+game_data = pd.read_csv('../src/Game_data/2022-2023_game_data.csv')
+
+X, y = prepare_data(game_data) # get our data to train on
+
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+model = LogisticRegression(learning_rate=0.01, num_iterations=1000)
+
+model.fit(X_train, y_train)
+
+y_pred = model.predict(X_test)
+
+accuracy = accuracy_score(y_test, y_pred)
+print(f"Accuracy: {accuracy:.2f}")
     
 
