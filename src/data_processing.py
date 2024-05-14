@@ -189,15 +189,18 @@ game = game_data.iloc[20]
 
 #in player data, need to change team TBL to TB, SJS to SJ, NJD to NJ, LAK to LA
 
-
+# game_data = game_data[:10]
 
 X, y = prepare_data(game_data) # get our data to train on
-print(X)
+# print(X)
 
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-model = LogisticRegression(learning_rate=0.01, num_iterations=1000)
+# print(X_train)
+# print()
+# print(X_test)
+model = LogisticRegression(learning_rate=0.01, num_iterations=10000)
 
 model.fit(X_train, y_train)
 

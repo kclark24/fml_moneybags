@@ -13,8 +13,10 @@ class LogisticRegression():
         self.bias = None
 
     def fit(self, X, y):
-        num_samples, num_features = X.shape()
-        self.weights = np.zeros(self.num_features)
+        # print(X)
+        num_samples = len(X)
+        num_features = len(X[0])
+        self.weights = np.zeros(num_features)
         self.bias = 0
 
         for i in range(self.num_iterations):
@@ -30,6 +32,7 @@ class LogisticRegression():
     def predict(self, X):
         linear_pred = np.dot(X, self.weights) + self.bias
         y_pred = sigmoid(linear_pred)
+        # TODO: probably change this to return normal output becasue we want certainty
         class_pred = [0 if y<= 0.5 else 1 for y in y_pred]
         return class_pred
 
