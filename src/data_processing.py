@@ -32,22 +32,39 @@ def abbreviate_name(full_name):
 
     return full_name 
 
-def get_roster_data(roster):
+def get_roster_data(roster, team_name):
+    # Split roster string into individual player names
     players = [player.strip() for player in roster.split(",")]
-    filtered_data = player_data.loc[player_data.index.intersection(players)]
-    return filtered_data
 
-def get_goalie_data(goalie):
-    return goalie_data.loc[goalie]
+    # Fetch data for each player on the specified team
+    filtered_data = []
+    for player in players:
+        if (player, team_name) in player_data.index:
+            player_stats = player_data.loc[(player, team_name)]
+            filtered_data.append(player_stats)
+    return pd.DataFrame(filtered_data)
+
+
+def get_goalie_data(goalie, team_name):
+    # Fetch goalie stats using both name and team to ensure correct identification
+    if (goalie, team_name) in goalie_data.index:
+        goalie_stats = goalie_data.loc[(goalie, team_name)]
+        return goalie_stats
+    else:
+        return None  # or handle as you see fit if no matching goalie is found
+
 
 def get_game_info(game):
-    home_roster_stats = get_roster_data(game['Home Roster'])
-    home_goalie_stats = get_goalie_data(game['Home Goalie'])
+    home_team = game['Home Team']
+    away_team = game['Away Team']
+    
+    # Get roster stats including team names to avoid duplicates
+    home_roster_stats = get_roster_data(game['Home Roster'], home_team)
+    home_goalie_stats = get_goalie_data(game['Home Goalie'], home_team)
 
-    away_roster_stats = get_roster_data(game['Away Roster'])
-    away_goalie_stats = get_goalie_data(game['Away Goalie'])
+    away_roster_stats = get_roster_data(game['Away Roster'], away_team)
+    away_goalie_stats = get_goalie_data(game['Away Goalie'], away_team)
 
-    # if the home team wins, return 1, otherwise return 0
     home_win = 1 if game['Home Score'] > game['Away Score'] else 0
 
     game_info = {
@@ -59,6 +76,8 @@ def get_game_info(game):
     }
 
     return game_info
+
+
 
 
 def average_stats(team_stats):
@@ -104,41 +123,78 @@ def calculate_features(game_info):
 
         
         
+
+
 def prepare_data(game_data):
-    expected_feature_length = 32
-    features = []
-    labels = []
+    num_games = len(game_data)
+    num_features_per_game = 32  # Adjust this based on the actual number of features you extract
     
-    for index, game in game_data.iterrows():
-        game_info = get_game_info(game)
+    # Pre-allocate a NumPy array with shape (num_games, num_features_per_game)
+    features = np.zeros((num_games, num_features_per_game))
+    labels = np.zeros(num_games)
+
+    for index in range(len(game_data)):
+        game_info = get_game_info(game_data.iloc[index])
         feature_set = calculate_features(game_info)
         
         home_features = list(feature_set[0].values())
         away_features = list(feature_set[1].values())
         combined_features = home_features + away_features
 
-        # Check if all feature vectors are of the same length
-        if len(combined_features) != expected_feature_length:  # Define expected_feature_length based on your model
-            print(f"Error in game index {index}: Feature length mismatch.")
-            continue  # Skip this game or handle the error as needed
 
-        features.append(combined_features)
-        labels.append(feature_set[2])  # home_win is at index 2
-        
-    return np.array(features), np.array(labels)
+        # Ensure combined_features is the correct length
+        if len(combined_features) == num_features_per_game:
+            try:
+                features[index] = combined_features
+                labels[index] = feature_set[2]  # home_win
+            except:
+                print(combined_features)
+        else:
+            print(f"Feature length mismatch in game index {index}")
+
+    return features, labels
 
 
+
+
+def change_team_names(team_name):
+    team_name_changes = {
+    'TBL': 'TB',  # Tampa Bay Lightning
+    'SJS': 'SJ',  # San Jose Sharks
+    'NJD': 'NJ',  # New Jersey Devils
+    'LAK': 'LA'   # Los Angeles Kings
+    }
+
+    if team_name in team_name_changes.keys():
+        return team_name_changes[team_name]
+    else:
+        return team_name
 
 
 player_data = normalize_data(pd.read_excel('../Stats/2022-23 Player Stats.xlsx'))
+player_data['Team'] = player_data['Team'].apply(change_team_names)
 player_data['Player'] = player_data['Player'].apply(abbreviate_name)
-player_data.set_index('Player', inplace=True)
+player_data.set_index(['Player', 'Team'], inplace=True)
 
 goalie_data = pd.read_excel('../Stats/2022-23 Goalie Stats.xlsx')
+goalie_data['Team'] = goalie_data['Team'].apply(change_team_names)
 goalie_data['Player'] = goalie_data['Player'].apply(abbreviate_name)
-goalie_data.set_index('Player', inplace=True)
+goalie_data.set_index(['Player', 'Team'], inplace=True)
 
 game_data = pd.read_csv('../src/Game_data/2022-2023_game_data.csv')
+
+
+
+
+game = game_data.iloc[20]
+print(get_game_info(game))
+
+
+
+
+#in player data, need to change team TBL to TB, SJS to SJ, NJD to NJ, LAK to LA
+
+
 
 X, y = prepare_data(game_data) # get our data to train on
 
