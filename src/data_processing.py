@@ -33,25 +33,23 @@ def abbreviate_name(full_name):
     return full_name 
 
 def get_roster_data(roster, team_name):
-    # Split roster string into individual player names
     players = [player.strip() for player in roster.split(",")]
-
-    # Fetch data for each player on the specified team
     filtered_data = []
     for player in players:
-        if (player, team_name) in player_data.index:
-            player_stats = player_data.loc[(player, team_name)]
-            filtered_data.append(player_stats)
+        # Check for player records that match any of the team names
+        player_records = player_data.loc[player_data.index.get_level_values('Player') == player]
+        for idx, player_stats in player_records.iterrows():
+            if team_name in idx[1].split(','):  # idx[1] should be the team part of the index
+                filtered_data.append(player_stats)
     return pd.DataFrame(filtered_data)
 
-
 def get_goalie_data(goalie, team_name):
-    # Fetch goalie stats using both name and team to ensure correct identification
-    if (goalie, team_name) in goalie_data.index:
-        goalie_stats = goalie_data.loc[(goalie, team_name)]
-        return goalie_stats
-    else:
-        return None  # or handle as you see fit if no matching goalie is found
+    goalie_records = goalie_data.loc[goalie_data.index.get_level_values('Player') == goalie]
+    for idx, goalie_stats in goalie_records.iterrows():
+        if team_name in idx[1].split(','):
+            return goalie_stats
+    return None  # Return None if no matching goalie is found
+
 
 
 def get_game_info(game):
@@ -159,16 +157,15 @@ def prepare_data(game_data):
 
 def change_team_names(team_name):
     team_name_changes = {
-    'TBL': 'TB',  # Tampa Bay Lightning
-    'SJS': 'SJ',  # San Jose Sharks
-    'NJD': 'NJ',  # New Jersey Devils
-    'LAK': 'LA'   # Los Angeles Kings
+        'TBL': 'TB',  # Tampa Bay Lightning
+        'SJS': 'SJ',  # San Jose Sharks
+        'NJD': 'NJ',  # New Jersey Devils
+        'LAK': 'LA'   # Los Angeles Kings
     }
+    # Split team names and change them accordingly
+    teams = team_name.split(',')
+    return ','.join([team_name_changes.get(team, team) for team in teams])
 
-    if team_name in team_name_changes.keys():
-        return team_name_changes[team_name]
-    else:
-        return team_name
 
 
 player_data = normalize_data(pd.read_excel('../Stats/2022-23 Player Stats.xlsx'))
@@ -187,8 +184,6 @@ game_data = pd.read_csv('../src/Game_data/2022-2023_game_data.csv')
 
 
 game = game_data.iloc[20]
-print(get_game_info(game))
-
 
 
 
@@ -197,6 +192,7 @@ print(get_game_info(game))
 
 
 X, y = prepare_data(game_data) # get our data to train on
+print(X)
 
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
