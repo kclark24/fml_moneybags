@@ -3,9 +3,12 @@ import numpy as np
 from LogisticRegression import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from RandomForest import RandomForest
+
 
 # STATS_LIST = ['S%', 'FOW%', 'G/GP', 'A/GP', '+/-/GP', 'PIM/GP', 'EVG/GP', 'EVP/GP', 'PPG/GP', 'PPP/GP', 'SHG/GP', 'SHP/GP', 'GWG/GP', 'S/GP']
-STATS_LIST = ['G/GP', 'A/GP', '+/-/GP', 'PIM/GP', 'EVG/GP', 'EVP/GP', 'PPG/GP', 'PPP/GP', 'GWG/GP', 'S/GP']
+#STATS_LIST = ['G/GP', 'A/GP', '+/-/GP', 'PIM/GP', 'EVG/GP', 'EVP/GP', 'PPG/GP', 'PPP/GP', 'S/GP']
+STATS_LIST = ['G','A','P','P/GP','+/-','FOW%','PIM']
 NUM_FEATURES = len(STATS_LIST * 2) + 4  # Adjust this based on the actual number of features you extract
 
 # Load the Excel file
@@ -34,7 +37,18 @@ def abbreviate_name(full_name):
             last_name += " " + parts[i+1]
         return f"{first_name[0]}.{last_name}"
 
-    return full_name 
+    return full_name
+
+def change_team_names(team_name):
+    team_name_changes = {
+        'TBL': 'TB',  # Tampa Bay Lightning
+        'SJS': 'SJ',  # San Jose Sharks
+        'NJD': 'NJ',  # New Jersey Devils
+        'LAK': 'LA'   # Los Angeles Kings
+    }
+    # Split team names and change them accordingly
+    teams = team_name.split(',')
+    return ','.join([team_name_changes.get(team, team) for team in teams]) 
 
 def get_roster_data(roster, team_name):
     players = [player.strip() for player in roster.split(",")]
@@ -51,6 +65,10 @@ def get_goalie_data(goalie, team_name):
     goalie_records = goalie_data.loc[goalie_data.index.get_level_values('Player') == goalie]
     for idx, goalie_stats in goalie_records.iterrows():
         if team_name in idx[1].split(','):
+            if goalie_stats['Sv%'] == '--':
+                goalie_stats['Sv%'] = np.float64(0.904)
+                goalie_stats['GAA'] = np.float64(2.97)
+
             return goalie_stats
     return None  # Return None if no matching goalie is found
 
@@ -134,7 +152,9 @@ def prepare_data(game_data):
                 features[index] = combined_features
                 labels[index] = feature_set[2]  # home_win
             except:
-                print(combined_features)
+                print(home_features)
+
+
         else:
             print(f"Feature length mismatch in game index {index}")
 
@@ -142,17 +162,6 @@ def prepare_data(game_data):
 
 
 
-
-def change_team_names(team_name):
-    team_name_changes = {
-        'TBL': 'TB',  # Tampa Bay Lightning
-        'SJS': 'SJ',  # San Jose Sharks
-        'NJD': 'NJ',  # New Jersey Devils
-        'LAK': 'LA'   # Los Angeles Kings
-    }
-    # Split team names and change them accordingly
-    teams = team_name.split(',')
-    return ','.join([team_name_changes.get(team, team) for team in teams])
 
 
 
@@ -168,24 +177,23 @@ goalie_data.set_index(['Player', 'Team'], inplace=True)
 
 game_data = pd.read_csv('../src/Game_data/2022-2023_game_data.csv')
 
-#in player data, need to change team TBL to TB, SJS to SJ, NJD to NJ, LAK to LA
-# game_data = game_data[:1]
-X, y = prepare_data(game_data) # get our data to train on
-# print(X)
-
+X, y = prepare_data(game_data)
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# print(X_train)
-# print()
-# print(X_test)
-model = LogisticRegression(learning_rate=0.01, num_iterations=1000)
-
+model = LogisticRegression(learning_rate=0.0001, num_iterations=100000)
 model.fit(X_train, y_train)
-
 y_pred = model.predict(X_test)
-
 accuracy = accuracy_score(y_test, y_pred)
 print(f"Accuracy: {accuracy:.2f}")
+
+
+clf = RandomForest(n_trees=10,n_feature=NUM_FEATURES)
+clf.fit(X_train, y_train)
+predictions = clf.predict(X_test)
+accuracy = accuracy_score(y_test, predictions)
+print(f"Accuracy: {accuracy:.2f}")
+
+
     
 
