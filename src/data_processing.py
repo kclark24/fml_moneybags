@@ -6,10 +6,10 @@ from sklearn.metrics import accuracy_score
 from RandomForest import RandomForest
 
 
-# STATS_LIST = ['S%', 'FOW%', 'G/GP', 'A/GP', '+/-/GP', 'PIM/GP', 'EVG/GP', 'EVP/GP', 'PPG/GP', 'PPP/GP', 'SHG/GP', 'SHP/GP', 'GWG/GP', 'S/GP']
+#STATS_LIST = ['S%', 'FOW%', 'G/GP', 'A/GP', '+/-/GP', 'PIM/GP', 'EVG/GP', 'EVP/GP', 'PPG/GP', 'PPP/GP', 'SHG/GP', 'SHP/GP', 'GWG/GP', 'S/GP']
 #STATS_LIST = ['G/GP', 'A/GP', '+/-/GP', 'PIM/GP', 'EVG/GP', 'EVP/GP', 'PPG/GP', 'PPP/GP', 'S/GP']
 STATS_LIST = ['G','A','P','P/GP','+/-','FOW%','PIM']
-NUM_FEATURES = len(STATS_LIST * 2) + 4  # Adjust this based on the actual number of features you extract
+NUM_FEATURES = len(STATS_LIST * 2 * 2) + 4  # Adjust this based on the actual number of features you extract
 
 # Load the Excel file
 def normalize_data(data):
@@ -55,10 +55,11 @@ def get_roster_data(roster, team_name):
     filtered_data = []
     for player in players:
         # Check for player records that match any of the team names
-        player_records = player_data.loc[player_data.index.get_level_values('Player') == player]
-        for idx, player_stats in player_records.iterrows():
-            if team_name in idx[1].split(','):  # idx[1] should be the team part of the index
-                filtered_data.append(player_stats)
+        if player in player_data.index.get_level_values('Player'):
+            player_records = player_data.loc[player_data.index.get_level_values('Player') == player]
+            for idx, player_stats in player_records.iterrows():
+                if team_name in idx[1].split(','):  # idx[1] should be the team part of the index
+                    filtered_data.append(player_stats)
     return pd.DataFrame(filtered_data)
 
 def get_goalie_data(goalie, team_name):
@@ -68,9 +69,9 @@ def get_goalie_data(goalie, team_name):
             if goalie_stats['Sv%'] == '--':
                 goalie_stats['Sv%'] = np.float64(0.904)
                 goalie_stats['GAA'] = np.float64(2.97)
-
             return goalie_stats
-    return None  # Return None if no matching goalie is found
+    # Return default stats if no matching goalie is found
+    return pd.Series({'Sv%': 0.904, 'GAA': 2.97})
 
 def get_game_info(game):
     home_team = game['Home Team']
@@ -96,7 +97,7 @@ def get_game_info(game):
     return game_info
 
 def average_stats(team_stats):
-    average_stats = {stat: 0 for stat in STATS_LIST}
+    average_stats = {f"avg_{stat}": 0 for stat in STATS_LIST}
 
     for stat in STATS_LIST:
 
@@ -106,10 +107,26 @@ def average_stats(team_stats):
             if team_stats[stat].iloc[i] != '--':
                 total += team_stats[stat].iloc[i]
                 players += 1
-        average_stats[stat] = total / players
+        average_stats[f"avg_{stat}"] = total / players
 
 
     return average_stats
+
+
+def maximum_stats(team_stats):
+    max_stats = {f"max_{stat}": 0 for stat in STATS_LIST}
+    for stat in STATS_LIST:
+
+        max_stat = 0
+
+        for i in range(len(team_stats[stat])):
+            if team_stats[stat].iloc[i] != '--' and team_stats[stat].iloc[i] > max_stat:
+                max_stat = team_stats[stat].iloc[i]
+        
+        max_stats[f"max_{stat}"]
+
+    return max_stats
+
 
 def calculate_features(game_info):
     home_roster_stats = game_info['home_roster_stats']
@@ -120,15 +137,20 @@ def calculate_features(game_info):
 
     home_win = game_info['home_win']
 
-    home_stats = average_stats(home_roster_stats)
-    home_stats['Sv%'] = home_goalie_stats['Sv%']
-    home_stats['GAA'] = home_goalie_stats['GAA']
+    home_avg_stats = average_stats(home_roster_stats)
+    home_max_stats = maximum_stats(home_roster_stats)
+    home_avg_stats['Sv%'] = home_goalie_stats['Sv%']
+    home_avg_stats['GAA'] = home_goalie_stats['GAA']
 
-    away_stats = average_stats(away_roster_stats)
-    away_stats['Sv%'] = away_goalie_stats['Sv%']
-    away_stats['GAA'] = away_goalie_stats['GAA']
+    away_avg_stats = average_stats(away_roster_stats)
+    away_max_stats = maximum_stats(away_roster_stats)
+    away_avg_stats['Sv%'] = away_goalie_stats['Sv%']
+    away_avg_stats['GAA'] = away_goalie_stats['GAA']
 
-    return [home_stats, away_stats, home_win] # here, X is home stats and away stats, y is home_win
+    home_combined_stats = {**home_avg_stats, **home_max_stats}
+    away_combined_stats = {**away_avg_stats, **away_max_stats}
+
+    return [home_combined_stats, away_combined_stats, home_win]
 
 def prepare_data(game_data):
     num_games = len(game_data)
@@ -153,16 +175,10 @@ def prepare_data(game_data):
                 labels[index] = feature_set[2]  # home_win
             except:
                 print(home_features)
-
-
         else:
             print(f"Feature length mismatch in game index {index}")
 
     return features, labels
-
-
-
-
 
 
 player_data = normalize_data(pd.read_excel('../Stats/2022-23 Player Stats.xlsx'))
@@ -175,24 +191,24 @@ goalie_data['Team'] = goalie_data['Team'].apply(change_team_names)
 goalie_data['Player'] = goalie_data['Player'].apply(abbreviate_name)
 goalie_data.set_index(['Player', 'Team'], inplace=True)
 
-game_data = pd.read_csv('../src/Game_data/2022-2023_game_data.csv')
+game_data = pd.read_csv('../src/Game_data/2023-2024_game_data.csv')
 
 X, y = prepare_data(game_data)
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-model = LogisticRegression(learning_rate=0.0001, num_iterations=100000)
+model = LogisticRegression(learning_rate=0.0001, num_iterations=10000)
 model.fit(X_train, y_train)
 y_pred = model.predict(X_test)
 accuracy = accuracy_score(y_test, y_pred)
 print(f"Accuracy: {accuracy:.2f}")
 
 
-clf = RandomForest(n_trees=10,n_feature=NUM_FEATURES)
-clf.fit(X_train, y_train)
-predictions = clf.predict(X_test)
-accuracy = accuracy_score(y_test, predictions)
-print(f"Accuracy: {accuracy:.2f}")
+# clf = RandomForest(n_trees=10,n_feature=NUM_FEATURES)
+# clf.fit(X_train, y_train)
+# predictions = clf.predict(X_test)
+# accuracy = accuracy_score(y_test, predictions)
+# print(f"Accuracy: {accuracy:.2f}")
 
 
     
