@@ -4,6 +4,10 @@ from LogisticRegression import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
+# STATS_LIST = ['S%', 'FOW%', 'G/GP', 'A/GP', '+/-/GP', 'PIM/GP', 'EVG/GP', 'EVP/GP', 'PPG/GP', 'PPP/GP', 'SHG/GP', 'SHP/GP', 'GWG/GP', 'S/GP']
+STATS_LIST = ['G/GP', 'A/GP', '+/-/GP', 'PIM/GP', 'EVG/GP', 'EVP/GP', 'PPG/GP', 'PPP/GP', 'GWG/GP', 'S/GP']
+NUM_FEATURES = len(STATS_LIST * 2) + 4  # Adjust this based on the actual number of features you extract
+
 # Load the Excel file
 def normalize_data(data):
     # Define columns not to normalize
@@ -50,8 +54,6 @@ def get_goalie_data(goalie, team_name):
             return goalie_stats
     return None  # Return None if no matching goalie is found
 
-
-
 def get_game_info(game):
     home_team = game['Home Team']
     away_team = game['Away Team']
@@ -75,16 +77,10 @@ def get_game_info(game):
 
     return game_info
 
-
-
-
 def average_stats(team_stats):
+    average_stats = {stat: 0 for stat in STATS_LIST}
 
-    stats_list = ['S%', 'FOW%', 'G/GP', 'A/GP', '+/-/GP', 'PIM/GP', 'EVG/GP', 'EVP/GP', 'PPG/GP', 'PPP/GP', 'SHG/GP', 'SHP/GP', 'GWG/GP', 'S/GP']
-
-    average_stats = {stat: 0 for stat in stats_list}
-
-    for stat in stats_list:
+    for stat in STATS_LIST:
 
         total = 0
         players = 0
@@ -98,7 +94,6 @@ def average_stats(team_stats):
     return average_stats
 
 def calculate_features(game_info):
-
     home_roster_stats = game_info['home_roster_stats']
     away_roster_stats = game_info['away_roster_stats']
 
@@ -106,8 +101,6 @@ def calculate_features(game_info):
     away_goalie_stats = game_info['away_goalie_stats']
 
     home_win = game_info['home_win']
-
-    stats_list = ['S%', 'FOW%', 'G/GP', 'A/GP', '+/-/GP', 'PIM/GP', 'EVG/GP', 'EVP/GP', 'PPG/GP', 'PPP/GP', 'SHG/GP', 'SHP/GP', 'GWG/GP', 'S/GP']
 
     home_stats = average_stats(home_roster_stats)
     home_stats['Sv%'] = home_goalie_stats['Sv%']
@@ -119,13 +112,9 @@ def calculate_features(game_info):
 
     return [home_stats, away_stats, home_win] # here, X is home stats and away stats, y is home_win
 
-        
-        
-
-
 def prepare_data(game_data):
     num_games = len(game_data)
-    num_features_per_game = 32  # Adjust this based on the actual number of features you extract
+    num_features_per_game = NUM_FEATURES  # Adjust this based on the actual number of features you extract
     
     # Pre-allocate a NumPy array with shape (num_games, num_features_per_game)
     features = np.zeros((num_games, num_features_per_game))
@@ -139,9 +128,8 @@ def prepare_data(game_data):
         away_features = list(feature_set[1].values())
         combined_features = home_features + away_features
 
-
         # Ensure combined_features is the correct length
-        if len(combined_features) == num_features_per_game:
+        if len(combined_features) == NUM_FEATURES:
             try:
                 features[index] = combined_features
                 labels[index] = feature_set[2]  # home_win
@@ -180,17 +168,8 @@ goalie_data.set_index(['Player', 'Team'], inplace=True)
 
 game_data = pd.read_csv('../src/Game_data/2022-2023_game_data.csv')
 
-
-
-
-game = game_data.iloc[20]
-
-
-
 #in player data, need to change team TBL to TB, SJS to SJ, NJD to NJ, LAK to LA
-
-# game_data = game_data[:10]
-
+# game_data = game_data[:1]
 X, y = prepare_data(game_data) # get our data to train on
 # print(X)
 
@@ -200,7 +179,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 # print(X_train)
 # print()
 # print(X_test)
-model = LogisticRegression(learning_rate=0.01, num_iterations=10000)
+model = LogisticRegression(learning_rate=0.01, num_iterations=1000)
 
 model.fit(X_train, y_train)
 
