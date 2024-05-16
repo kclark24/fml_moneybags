@@ -13,21 +13,29 @@ class LogisticRegression():
         self.bias = None
 
     def fit(self, X, y):
-        # print(X)
+
         num_samples = len(X)
         num_features = len(X[0])
+
+        # initialize weights and bias to 0
         self.weights = np.zeros(num_features)
         self.bias = 0
 
         for i in range(self.num_iterations):
+
+            # pred = sum wi * xi + bias
             linear_pred = np.dot(X, self.weights) + self.bias
+
+            #apply sigmoid function
             y_pred = sigmoid(linear_pred)
 
-            dw = (1/num_samples) * np.dot(X.T, (y_pred-y))
-            db = (1/num_samples) * np.sum(y_pred-y)
+            # calculate the gradients for loss
+            weight_grad = (1/num_samples) * np.dot(X.T, (y_pred-y))
+            bias_grad = (1/num_samples) * np.sum(y_pred-y)
 
-            self.weights -= self.learning_rate * dw
-            self.bias -= self.learning_rate * db
+            # adjust each of the weights
+            self.weights -= self.learning_rate * weight_grad
+            self.bias -= self.learning_rate * bias_grad
 
     def predict(self, X):
         #print(self.weights)
