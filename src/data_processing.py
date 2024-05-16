@@ -11,17 +11,16 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, roc_curve, auc, precision_recall_curve
 from itertools import combinations, chain
+from scipy.stats import sem
 
 
-#STATS_LIST = ['S%', 'FOW%', 'G/GP', 'A/GP', '+/-/GP', 'PIM/GP', 'EVG/GP', 'EVP/GP', 'PPG/GP', 'PPP/GP', 'SHG/GP', 'SHP/GP', 'GWG/GP', 'S/GP']
-STATS_LIST = ['G','A', '+/-', 'FOW%']
+ALL_STATS = ['S%', 'FOW%', 'G', 'A', '+/-', 'PIM', 'EVG', 'EVP', 'PPG', 'PPP', 'SHG', 'SHP', 'GWG']
 
 
-def generate_feature_combinations(stats_list):
-    feature_types = ['avg'] # 'max' can also be included
+def generate_feature_combinations(stats_list, feature_types):
+
     all_features = []
 
-    # Generate all possible combinations of average and maximum for each stat
     for num_features in range(1, len(stats_list) + 1):
         for combo in combinations(stats_list, num_features):
             for sub_combo in chain.from_iterable(combinations(feature_types, r) for r in range(1, len(feature_types) + 1)):
@@ -31,12 +30,10 @@ def generate_feature_combinations(stats_list):
     return all_features
 
 
-# Load the Excel file
 def normalize_data(data):
-    # Define columns not to normalize
+
     do_not_normalize = ['Player', 'Season', 'Team', 'S/C', 'Pos', 'GP', 'P/GP', 'S%', 'TOI/GP', 'FOW%']
 
-    # Normalize all other numeric columns by games played
     for column in data.columns:
         if column not in do_not_normalize and data[column].dtype in [np.float64, np.int64]:
             data[column + '/GP'] = data[column] / data['GP']
@@ -66,19 +63,19 @@ def change_team_names(team_name):
         'NJD': 'NJ',  # New Jersey Devils
         'LAK': 'LA'   # Los Angeles Kings
     }
-    # Split team names and change them accordingly
+
     teams = team_name.split(',')
     return ','.join([team_name_changes.get(team, team) for team in teams]) 
+
 
 def get_roster_data(roster, team_name):
     players = [player.strip() for player in roster.split(",")]
     filtered_data = []
     for player in players:
-        # Check for player records that match any of the team names
         if player in player_data.index.get_level_values('Player'):
             player_records = player_data.loc[player_data.index.get_level_values('Player') == player]
             for idx, player_stats in player_records.iterrows():
-                if team_name in idx[1].split(','):  # idx[1] should be the team part of the index
+                if team_name in idx[1].split(','):
                     filtered_data.append(player_stats)
     return pd.DataFrame(filtered_data)
 
@@ -91,7 +88,8 @@ def get_goalie_data(goalie, team_name):
                 goalie_stats['Sv%'] = np.float64(0.904)
                 goalie_stats['GAA'] = np.float64(2.97)
             return goalie_stats
-    # Return default stats if no matching goalie is found
+        
+    # Return league average stats if no matching goalie is found
     return pd.Series({'Sv%': 0.904, 'GAA': 2.97})
 
 
@@ -99,7 +97,6 @@ def get_game_info(game):
     home_team = game['Home Team']
     away_team = game['Away Team']
     
-    # Get roster stats including team names to avoid duplicates
     home_roster_stats = get_roster_data(game['Home Roster'], home_team)
     home_goalie_stats = get_goalie_data(game['Home Goalie'], home_team)
 
@@ -120,11 +117,10 @@ def get_game_info(game):
 
 
 def average_stats(team_stats):
-    stats = STATS_LIST
 
-    average_stats = {f"avg_{stat}": 0 for stat in STATS_LIST}
+    average_stats = {f"avg_{stat}": 0 for stat in ALL_STATS}
 
-    for stat in STATS_LIST:
+    for stat in ALL_STATS:
 
         total = 0
         players = 0
@@ -139,8 +135,10 @@ def average_stats(team_stats):
 
 
 def maximum_stats(team_stats):
-    max_stats = {f"max_{stat}": 0 for stat in STATS_LIST}
-    for stat in STATS_LIST:
+   
+    max_stats = {f"max_{stat}": 0 for stat in ALL_STATS}
+    
+    for stat in ALL_STATS:
 
         max_stat = 0
 
@@ -153,7 +151,7 @@ def maximum_stats(team_stats):
     return max_stats
 
 
-def calculate_features(game_info, selected_features):
+def calculate_features(game_info, selected_features,average=True,max=True,goalie_features=True):
     home_roster_stats = game_info['home_roster_stats']
     away_roster_stats = game_info['away_roster_stats']
 
@@ -164,37 +162,58 @@ def calculate_features(game_info, selected_features):
 
     home_avg_stats = average_stats(home_roster_stats)
     home_max_stats = maximum_stats(home_roster_stats)
-    home_avg_stats['avg_Sv%'] = home_goalie_stats['Sv%']
-    home_avg_stats['avg_GAA'] = home_goalie_stats['GAA']
+    home_avg_stats['Sv%'] = home_goalie_stats['Sv%']
+    home_avg_stats['GAA'] = home_goalie_stats['GAA']
 
     away_avg_stats = average_stats(away_roster_stats)
     away_max_stats = maximum_stats(away_roster_stats)
-    away_avg_stats['avg_Sv%'] = away_goalie_stats['Sv%']
-    away_avg_stats['avg_GAA'] = away_goalie_stats['GAA']
+    away_avg_stats['Sv%'] = away_goalie_stats['Sv%']
+    away_avg_stats['GAA'] = away_goalie_stats['GAA']
 
-    home_combined_stats = {**home_avg_stats}#,**home_max_stats}
-    away_combined_stats = {**away_avg_stats}#,**away_max_stats}
+    if average and max:
 
-    # Always include Sv% and GAA in the selected features
-    extra_features = ['GAA'] # interesting that goalie save percentage no impact
+        home_combined_stats = {**home_avg_stats,**home_max_stats}
+        away_combined_stats = {**away_avg_stats,**away_max_stats}
 
-    home_features = {k: v for k, v in home_combined_stats.items() if k in selected_features or k in extra_features}
-    away_features = {k: v for k, v in away_combined_stats.items() if k in selected_features or k in extra_features}
+    elif average:
 
+        home_combined_stats = {**home_avg_stats}
+        away_combined_stats = {**away_avg_stats}
+
+    elif max:
+
+        home_combined_stats = {**home_max_stats}
+        away_combined_stats = {**away_max_stats}
+
+    else:
+        home_combined_stats = {}
+        away_combined_stats = {}
+
+    extra_features = ['Sv%','GAA']
+
+
+    home_features = {k: v for k, v in home_combined_stats.items() if k in selected_features}
+    away_features = {k: v for k, v in away_combined_stats.items() if k in selected_features}
+
+    if goalie_features:
+        for feature in extra_features:
+            home_features[feature] = home_avg_stats[feature]
+            away_features[feature] = away_avg_stats[feature]
+        
     return [home_features, away_features, home_win]
 
 
-def prepare_data(game_data, selected_features):
+def prepare_data(game_data, selected_features,average=True,max=True,goalie_features=True):
     num_games = len(game_data)
-    num_features_per_game = len(selected_features) * 2 # Include goalie statistics, so + 4
+    num_features_per_game = len(selected_features) * 2 + 4 if goalie_features else len(selected_features) * 2 # Include goalie statistics, so + 4
     
-    # Pre-allocate a NumPy array with shape (num_games, num_features_per_game)
+    
     features = np.zeros((num_games, num_features_per_game))
     labels = np.zeros(num_games)
 
     for index in range(len(game_data)):
         game_info = get_game_info(game_data.iloc[index])
-        feature_set = calculate_features(game_info, selected_features)
+        feature_set = calculate_features(game_info, selected_features,average,max,goalie_features)
         
         home_features = list(feature_set[0].values())
         away_features = list(feature_set[1].values())
@@ -214,13 +233,13 @@ def prepare_data(game_data, selected_features):
     return features, labels
 
 
-def evaluate_feature_combinations(game_data, feature_combinations, output_file):
+def evaluate_feature_combinations(game_data, feature_combinations, output_file, goalie_stats=False):
     best_accuracy = 0
     best_features = None
 
     with open(output_file, 'w') as file:
         for features in feature_combinations:
-            X, y = prepare_data(game_data, features)
+            X, y = prepare_data(game_data, features,average=True,max=True,goalie_features=goalie_stats)
 
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
@@ -241,28 +260,96 @@ def evaluate_feature_combinations(game_data, feature_combinations, output_file):
     return best_features, best_accuracy
 
 
-# USE TO FIND THE BEST FEATURES
+def find_best_features(stats,goalie_stats=False):
 
-# player_data = normalize_data(pd.read_excel('../Stats/2022-23 Player Stats.xlsx'))
-# player_data['Team'] = player_data['Team'].apply(change_team_names)
-# player_data['Player'] = player_data['Player'].apply(abbreviate_name)
-# player_data.set_index(['Player', 'Team'], inplace=True)
+    feature_combinations = generate_feature_combinations(stats, ['avg','max'])
+    output_file = 'feature_combinations_results.txt'
+    best_features, best_accuracy = evaluate_feature_combinations(game_data, feature_combinations, output_file, goalie_stats)
 
-# goalie_data = pd.read_excel('../Stats/2022-23 Goalie Stats.xlsx')
-# goalie_data['Team'] = goalie_data['Team'].apply(change_team_names)
-# goalie_data['Player'] = goalie_data['Player'].apply(abbreviate_name)
-# goalie_data.set_index(['Player', 'Team'], inplace=True)
-
-# game_data = pd.read_csv('../src/Game_data/2023-2024_game_data.csv')
-
-# feature_combinations = generate_feature_combinations(STATS_LIST)
-# output_file = 'feature_combinations_results.txt'
-# best_features, best_accuracy = evaluate_feature_combinations(game_data, feature_combinations, output_file)
-
-# print(f"Best features: {best_features} - Accuracy: {best_accuracy:.2f}")
+    print(f"Best features: {best_features} - Accuracy: {best_accuracy:.2f}")
+    return best_features
 
 
-selected_features = ['avg_G', 'avg_A', 'avg_+/-', 'avg_FOW%']
+def plot_certainty_accuracy(certainties, y_test, y_pred):
+    thresholds = np.arange(0.5, 0.75, 0.01)
+    accuracies = []
+    lower_bounds = []
+    upper_bounds = []
+
+    for threshold in thresholds:
+        high_certainty_indices = np.where((certainties >= threshold) | (certainties <= (1 - threshold)))[0]
+        high_certainty_predictions = np.array(y_pred)[high_certainty_indices]
+        high_certainty_actuals = np.array(y_test)[high_certainty_indices]
+
+        if len(high_certainty_predictions) > 0:
+            accuracy = accuracy_score(high_certainty_actuals, high_certainty_predictions)
+            accuracies.append(accuracy)
+            sem_val = sem(high_certainty_predictions == high_certainty_actuals)
+            lower_bounds.append(accuracy - sem_val)
+            upper_bounds.append(accuracy + sem_val)
+        else:
+            accuracies.append(0)
+            lower_bounds.append(0)
+            upper_bounds.append(0)
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(thresholds, accuracies, label='Accuracy', color='b')
+    plt.plot(thresholds, lower_bounds, label='Lower Bound', linestyle='--', color='r')
+    plt.plot(thresholds, upper_bounds, label='Upper Bound', linestyle='--', color='g')
+    plt.fill_between(thresholds, lower_bounds, upper_bounds, color='gray', alpha=0.2)
+    plt.title('Model Accuracy vs. Certainty Threshold with Confidence Intervals')
+    plt.xlabel('Certainty Threshold')
+    plt.ylabel('Accuracy')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+def plot_confusion_matrices(certainties,y_pred,y_test):
+    bin_20 = []
+    bin_20_pred = []
+    bin_30 = []
+    bin_30_pred = []
+    bin_40 = []
+    bin_40_pred = []
+
+    for i in range(len(certainties)):
+        certainty = certainties[i]
+        prediction = y_pred[i]
+        correct_pred = y_test[i]
+        if 0.3 > certainty or certainty > 0.7:
+            bin_20.append(prediction)
+            bin_20_pred.append(correct_pred)
+        if 0.4 > certainty or certainty > 0.6:
+            bin_30.append(prediction)
+            bin_30_pred.append(correct_pred)
+        if 0.5 > certainty or certainty > 0.5:
+            bin_40.append(prediction)
+            bin_40_pred.append(correct_pred)
+
+
+
+
+    conf_matrix = confusion_matrix(bin_20, bin_20_pred)
+    sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
+    plt.title('Confusion Matrix for 30% Interval')
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.show()
+
+    conf_matrix = confusion_matrix(bin_30, bin_30_pred)
+    sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
+    plt.title('Confusion Matrix for 40% Interval')
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.show()
+
+    conf_matrix = confusion_matrix(bin_40, bin_40_pred)
+    sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
+    plt.title('Confusion Matrix for 50% Interval')
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.show()
 
 
 
@@ -279,7 +366,13 @@ goalie_data.set_index(['Player', 'Team'], inplace=True)
 game_data = pd.read_csv('../src/Game_data/2023-2024_game_data.csv')
 
 
-X, y = prepare_data(game_data, selected_features)
+# Can set the output of this to be the list of selected features, which should be the set of features with the highest accuracy.
+#best_features = find_best_features(ALL_STATS,goalie_stats=True)
+selected_features = ['avg_G', 'avg_A', 'avg_+/-', 'avg_FOW%']
+
+
+# Only using max stats
+X, y = prepare_data(game_data, selected_features,average=True,max=False,goalie_features=False)
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
@@ -289,112 +382,14 @@ certainties, y_pred = model.predict(X_test)
 accuracy = accuracy_score(y_test, y_pred)
 print(f"Accuracy: {accuracy:.10f}")
 
-# best_iterations = None
-# best_accuracy = 0
-# values = np.arange(100000,1000000,25000)
-# for value in values:
+# Some helpful plots to check performance
 
-#     model = LogisticRegression(learning_rate=1e-5, num_iterations=value)
-#     model.fit(X_train, y_train)
-#     certainties, y_pred = model.predict(X_test)
-#     accuracy = accuracy_score(y_test, y_pred)
-#     if accuracy > best_accuracy:
-#         best_accuracy = accuracy
-#         best_iterations = value
-#     print(f"Value: {value}, Accuracy: {accuracy:.10f}")
-
-
-bin_20 = []
-bin_20_pred = []
-bin_30 = []
-bin_30_pred = []
-bin_40 = []
-bin_40_pred = []
-
-for i in range(len(certainties)):
-    certainty = certainties[i]
-    prediction = y_pred[i]
-    correct_pred = y_test[i]
-    if 0.3 > certainty or certainty > 0.7:
-        bin_20.append(prediction)
-        bin_20_pred.append(correct_pred)
-    if 0.4 > certainty or certainty > 0.6:
-        bin_30.append(prediction)
-        bin_30_pred.append(correct_pred)
-    if 0.5 > certainty or certainty > 0.5:
-        bin_40.append(prediction)
-        bin_40_pred.append(correct_pred)
+# plot_certainty_accuracy(certainties, y_test, y_pred)
+# plot_confusion_matrices(certainties,y_pred,y_test)
 
 
 
-
-conf_matrix = confusion_matrix(bin_20, bin_20_pred)
-sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
-plt.title('Confusion Matrix for 30% Interval')
-plt.xlabel('Predicted')
-plt.ylabel('Actual')
-plt.show()
-
-conf_matrix = confusion_matrix(bin_30, bin_30_pred)
-sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
-plt.title('Confusion Matrix for 40% Interval')
-plt.xlabel('Predicted')
-plt.ylabel('Actual')
-plt.show()
-
-conf_matrix = confusion_matrix(bin_40, bin_40_pred)
-sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
-plt.title('Confusion Matrix for 50% Interval')
-plt.xlabel('Predicted')
-plt.ylabel('Actual')
-plt.show()
-
-
-def plot_certainty_accuracy(certainties, y_test, y_pred):
-    thresholds = np.arange(0.5, 0.8, 0.01)
-    accuracies = []
-
-    for threshold in thresholds:
-        high_certainty_indices = np.where((certainties >= threshold) | (certainties <= (1 - threshold)))[0]
-        
-        high_certainty_predictions = []
-        high_certainty_actuals = []
-
-        for index in high_certainty_indices:
-            high_certainty_predictions.append(y_pred[index])
-            high_certainty_actuals.append(y_test[index])
-
-
-        if len(high_certainty_predictions) > 0:
-            accuracy = accuracy_score(high_certainty_actuals, high_certainty_predictions)
-        else:
-            accuracy = 0
-        accuracies.append(accuracy)
-
-
-        
-
-    plt.figure(figsize=(10, 6))
-    plt.plot(thresholds, accuracies)
-    plt.title('Model Accuracy vs. Certainty Threshold')
-    plt.xlabel('Certainty Threshold')
-    plt.ylabel('Accuracy')
-    plt.grid(True)
-    plt.show()
-
-# Define the features and prepare the data (same as before)
-# ...
-
-# Fit the logistic regression model and get predictions (same as before)
-# ...
-
-# Assuming certainties and y_pred are defined after model prediction
-# certainties, y_pred = model.predict(X_test)
-plot_certainty_accuracy(certainties, y_test, y_pred)
-
-
-
-
+# Test on the playoffs
 player_data = normalize_data(pd.read_excel('../Stats/2023-24 Player Stats.xlsx'))
 player_data['Team'] = player_data['Team'].apply(change_team_names)
 player_data['Player'] = player_data['Player'].apply(abbreviate_name)
@@ -408,7 +403,7 @@ goalie_data.set_index(['Player', 'Team'], inplace=True)
 
 test_game = pd.read_csv('../src/Game_data/2023-2024_playoffs.csv')
 
-cool_X, cool_y = prepare_data(test_game, selected_features)
+cool_X, cool_y = prepare_data(test_game, selected_features,average=True,max=False,goalie_features=False)
 y_pred = model.predict(cool_X)
 print(y_pred)
 

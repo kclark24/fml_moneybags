@@ -1,1 +1,43 @@
 Features: ['avg_S%'] - Accuracy: 0.60
+Features: ['max_S%'] - Accuracy: 0.60
+Features: ['avg_S%', 'max_S%'] - Accuracy: 0.60
+Features: ['avg_FOW%'] - Accuracy: 0.60
+Features: ['max_FOW%'] - Accuracy: 0.60
+Features: ['avg_FOW%', 'max_FOW%'] - Accuracy: 0.60
+Features: ['avg_G'] - Accuracy: 0.62
+Features: ['max_G'] - Accuracy: 0.60
+Features: ['avg_G', 'max_G'] - Accuracy: 0.62
+Features: ['avg_A'] - Accuracy: 0.63
+Features: ['max_A'] - Accuracy: 0.60
+Features: ['avg_A', 'max_A'] - Accuracy: 0.63
+Features: ['avg_+/-'] - Accuracy: 0.63
+Features: ['max_+/-'] - Accuracy: 0.60
+Features: ['avg_+/-', 'max_+/-'] - Accuracy: 0.63
+Features: ['avg_PIM'] - Accuracy: 0.61
+Features: ['max_PIM'] - Accuracy: 0.60
+Features: ['avg_PIM', 'max_PIM'] - Accuracy: 0.61
+Features: ['avg_EVG'] - Accuracy: 0.61
+Features: ['max_EVG'] - Accuracy: 0.60
+Features: ['avg_EVG', 'max_EVG'] - Accuracy: 0.61
+Features: ['avg_EVP'] - Accuracy: 0.62
+Features: ['max_EVP'] - Accuracy: 0.60
+Features: ['avg_EVP', 'max_EVP'] - Accuracy: 0.62
+Features: ['avg_PPG'] - Accuracy: 0.60
+Features: ['max_PPG'] - Accuracy: 0.60
+Features: ['avg_PPG', 'max_PPG'] - Accuracy: 0.60
+Features: ['avg_PPP'] - Accuracy: 0.62
+Features: ['max_PPP'] - Accuracy: 0.60
+Features: ['avg_PPP', 'max_PPP'] - Accuracy: 0.62
+Features: ['avg_SHG'] - Accuracy: 0.60
+Features: ['max_SHG'] - Accuracy: 0.60
+Features: ['avg_SHG', 'max_SHG'] - Accuracy: 0.60
+Features: ['avg_SHP'] - Accuracy: 0.60
+Features: ['max_SHP'] - Accuracy: 0.60
+Features: ['avg_SHP', 'max_SHP'] - Accuracy: 0.60
+Features: ['avg_GWG'] - Accuracy: 0.60
+Features: ['max_GWG'] - Accuracy: 0.60
+Features: ['avg_GWG', 'max_GWG'] - Accuracy: 0.60
+Features: ['avg_S%', 'avg_FOW%'] - Accuracy: 0.60
+Features: ['max_S%', 'max_FOW%'] - Accuracy: 0.60
+Features: ['avg_S%', 'max_S%', 'avg_FOW%', 'max_FOW%'] - Accuracy: 0.60
+Features: ['avg_S%', 'avg_G'] - Accuracy: 0.63

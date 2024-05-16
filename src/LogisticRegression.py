@@ -30,10 +30,9 @@ class LogisticRegression():
             self.bias -= self.learning_rate * db
 
     def predict(self, X):
+        #print(self.weights)
         linear_pred = np.dot(X, self.weights) + self.bias
         y_pred = sigmoid(linear_pred)
-        # TODO: probably change this to return normal output becasue we want certainty
-        #class_pred = y_pred
         class_pred = [0 if y<= 0.5 else 1 for y in y_pred]
         return y_pred, class_pred
 
